@@ -1,0 +1,7 @@
+test_consumer.py
+test_producer.py
+.vscode
+__pycache__
+.coverage
+.scannerwork/
+coverage.xml

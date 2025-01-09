@@ -1,0 +1,189 @@
+BUILD_TARGET = ["desenvolvimento", "homologacao", "master"]
+DEPLOY_TARGET = ["desenvolvimento", "homologacao", "master"]
+validateSwagger = false
+buildAgentLabel = 'python'
+app_name = 'traillers-positions-consume'
+namespace = 'channel-traillers'
+sonarScannerVersion = 'SonarQubeScanner'
+
+switch(JOB_BASE_NAME) {
+    case 'desenvolvimento':
+        SHORT_ENV           = 'dev'
+        ENVIRONMENT         = 'desenvolvimento'   
+        PROJECT_NAME        = "${SHORT_ENV}-${namespace}"
+	    CLUSTER_NAME        = 'openshift4_dev_hom'
+        BUILD_CLUSTER_NAME  = 'openshift4_dev_hom'
+        BUILD_PROJECT_NAME  = PROJECT_NAME
+    break
+    case 'homologacao':
+        SHORT_ENV           = 'hom'
+        PROJECT_NAME        = "${SHORT_ENV}-${namespace}"
+        ENVIRONMENT         = 'homologacao'
+        CLUSTER_NAME        = 'openshift4_dev_hom'
+        BUILD_CLUSTER_NAME   = 'openshift4_dev_hom'
+        BUILD_PROJECT_NAME  = PROJECT_NAME
+    break
+    case 'master':
+        SHORT_ENV           = 'prd'
+        PROJECT_NAME        = "${SHORT_ENV}-${namespace}"
+        ENVIRONMENT         = 'master'
+        CLUSTER_NAME        = 'openshift4_production'
+        BUILD_CLUSTER_NAME   = 'openshift4_dev_hom'
+        BUILD_PROJECT_NAME  = "hom-${namespace}" // Used the homologation enviroment for construction
+    break
+}
+
+pipeline {
+    options {
+        disableConcurrentBuilds()
+    }
+    agent {
+        node {
+            label "${buildAgentLabel}"
+        }
+    }
+
+    environment {
+        CI = "true" 
+	    appVersion="v1"
+
+	    //parameters from project jenkinsfile
+	    appName="${SHORT_ENV}-${app_name}-${appVersion}"
+        //CI/CD project name
+	    ciProjectName="${PROJECT_NAME}"
+	    //openshift cluster names (installation)
+        DEPLOY_TO = "${GIT_BRANCH}"
+        //sonar scanner from jenkins conf
+    }
+
+    stages {
+        stage('Aproval') {
+            when {
+                environment name:'DEPLOY_TO', value:"master"
+            }
+            steps {
+                //echo sh(script: 'env|sort', returnStdout: true)
+                echo 'Aproval'
+                script {
+                    env.GMUD_NUMBER = cicdAprovalChange();
+                }
+            }
+        }
+        stage('Config OpenShift Project') {
+            when {
+                expression { DEPLOY_TO in BUILD_TARGET}
+            }
+            steps {
+                echo 'Creating Project'
+                openshiftConfigProject(
+                    "${BUILD_CLUSTER_NAME}", 
+                    "${BUILD_PROJECT_NAME}", 
+                    "${PROJECT_NAME}", 
+                    "${CLUSTER_NAME}", 
+                    "${BRANCH_NAME}"
+                );
+            }
+        }
+        stage('Validate App') {
+            when {
+                expression { DEPLOY_TO in BUILD_TARGET }
+            }
+            steps {
+                echo DEPLOY_TO
+                echo 'Validate App'
+                openshiftValidateApp("${validateSwagger}");
+            }
+        }
+        stage('Unit Tests') {
+            when {
+                expression { DEPLOY_TO in BUILD_TARGET }
+            }
+            steps {
+                openshiftTestApp()
+            }
+        }
+        stage('Quality Gate') {
+            when {
+                expression { DEPLOY_TO in BUILD_TARGET }
+            }
+            steps {
+                openshiftSonarQualityGate(sonarScannerVersion);
+            }
+        }
+        stage('Build App') {
+            when {
+                expression { DEPLOY_TO in BUILD_TARGET }
+            }
+            steps {
+                echo DEPLOY_TO
+                echo "Build App"
+                openshiftPreConfigure();
+                openshiftBuildApp();
+            }
+        }
+        stage('Publish Artifact (Nexus)') {
+            when {
+                expression { DEPLOY_TO in BUILD_TARGET }
+            }
+            steps {
+                openshiftPublishArtifact();
+            }
+        }
+        stage('Build Image') {
+            when {
+                expression { DEPLOY_TO in BUILD_TARGET }
+            }
+            steps {
+                openshiftBuildImage(BUILD_PROJECT_NAME, appName);
+            }
+        }
+        stage('Deploy Dev') {
+            when {
+                
+                environment name: 'DEPLOY_TO', value: 'desenvolvimento'
+            }
+            steps {
+                echo DEPLOY_TO
+                echo  'Deploy Dev'
+                openshiftDeployApp(BRANCH_NAME, PROJECT_NAME, appName, "${CLUSTER_NAME}","${WORKSPACE}");
+            }
+        }
+        stage('Deploy Hom') {
+            when {
+                
+                environment name: 'DEPLOY_TO', value: 'homologacao'
+            }
+            steps {
+                echo  'Deploy homologation'
+                openshiftDeployApp(BRANCH_NAME, PROJECT_NAME, appName, "${CLUSTER_NAME}","${WORKSPACE}");
+            }
+        }
+        stage('Deliver Prod') {
+            when {
+                
+                environment name: 'DEPLOY_TO', value: 'master'
+            }
+            steps {
+                script{
+				    openshiftImageMirror.toPrdCluster("${BUILD_PROJECT_NAME}/${app_name}-${appVersion}:prd", "${PROJECT_NAME}/${app_name}-${appVersion}:prd");
+				}
+            }
+        }
+        stage('Deploy for production') {
+            when {
+                environment name: 'DEPLOY_TO', value: 'master'
+            }
+            steps {
+                openshiftDeployApp(BRANCH_NAME, PROJECT_NAME, appName, CLUSTER_NAME,"${WORKSPACE}");
+            }
+        }
+        stage('Git Tag') {
+            when {
+                environment name: 'DEPLOY_TO', value: 'master'
+            }
+            steps {
+                cicdGitTag();
+            }
+        }
+    }
+}

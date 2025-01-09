@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: "${APP_NAME}-build"
+parameters:
+- name: APP_NAME
+  description: The name assigned to all of the application objects defined in this template.
+  displayName: Application Name
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXX
+
+- name: APP_NAME_BUILD
+  description: The name assigned to all of the application objects defined in this template.
+  displayName: buildConfig Name 
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXX
+
+
+- name: APP_VERSION
+  description: The version of this application.
+  displayName: Application Version
+  required: true
+  value: XX
+
+- name: GIT_SOURCE_URL
+  description: The source URL for the application
+  displayName: Source URL
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXX
+
+- name: GIT_SOURCE_SECRET
+  description: The Git Source Secret for Jenkins authentication on Git SCM
+  displayName: Source Secret
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXX
+
+- name: GIT_BRANCH
+  description: Name of git branch 
+  displayName: Name of git branch
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXX
+
+- name: PROJECT_NAME
+  description: The project name to deploy
+  displayName: The project name to deploy
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXX
+
+- name: IMAGE_TAG
+  description: The docker image tag generated in the build process
+  displayName: Image Tag
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXX
+
+objects:
+- apiVersion: image.openshift.io/v1
+  kind: ImageStream
+  metadata:
+    name: "${APP_NAME}-${APP_VERSION}"
+    namespace: "${PROJECT_NAME}"
+  spec:
+    lookupPolicy:
+      local: false
+
+- apiVersion: v1
+  kind: BuildConfig
+  metadata:
+    labels:
+      app: "${APP_NAME_BUILD}-${APP_VERSION}-docker"
+    name: "${APP_NAME_BUILD}-${APP_VERSION}-docker"
+  spec:
+    output:
+      to:
+        kind: ImageStreamTag
+        name: "${APP_NAME}-${APP_VERSION}:${IMAGE_TAG}"
+    postCommit: {}
+    resources: {}
+    runPolicy: Serial
+    source:
+      git:
+        uri: "${GIT_SOURCE_URL}"
+        ref: "${GIT_BRANCH}"
+    strategy:
+      dockerStrategy:
+        dockerfilePath: Dockerfile
+      type: Docker
+    triggers: []

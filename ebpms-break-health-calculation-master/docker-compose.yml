@@ -1,0 +1,12 @@
+version: '3.3'
+services:
+  ebpms:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: ./etc/openshift/homologacao/deployment.env
+    ports:
+      - 8888:8888
+
+      
+    
