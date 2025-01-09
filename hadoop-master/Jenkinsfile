@@ -1,0 +1,131 @@
+APP_NAME        = 'hadoop'
+DEPLOY_TARGET   = ['master', 'homologacao', 'desenvolvimento']
+GMUD_NEED       = ['master']
+ARTIFACT_SERVER = '172.16.2.59'
+BASE_REPO       = "arquiteturadados/hadoop.git"
+GMUD_NEED       = ['master']
+sonarScannerVersion = 'SonarQubeScanner'
+
+// Environment-specifc variables
+switch(JOB_BASE_NAME) {
+  case 'master':
+    ENVIRONMENT = 'producao'
+    DEPLOY_PATH = '/home/hadoop/sascar'
+  break
+  case 'homologacao':
+    ENVIRONMENT = 'homologacao'
+    DEPLOY_PATH = '/home/hadoop/sascar'
+  break
+  case 'desenvolvimento':
+    ENVIRONMENT = 'desenvolvimento'
+    DEPLOY_PATH = '/home/hadoop/sascar'
+  break
+}
+
+// Shortcuts
+BUILDS_PATH = "builds/${APP_NAME}/${ENVIRONMENT}"
+CONFIG_PATH = "settings/${APP_NAME}/${ENVIRONMENT}"
+
+stage('Approval'){
+  if (BRANCH_NAME in GMUD_NEED){
+    env.GMUD_NUMBER = cicdAprovalChange();
+  }
+}
+
+properties([disableConcurrentBuilds(), pipelineTriggers([])])
+node ('master') {
+  if (BRANCH_NAME in DEPLOY_TARGET) {
+    prepareSCM()
+
+    unittest ()
+
+    callsonarscanner()
+
+    compressArtifact()
+
+    uploadArtifact()
+
+    deploy()
+
+    callgittag()
+  }
+}
+
+def prepareSCM() {
+  stage("Prepare scm") {
+    deleteDir()
+    checkout scm
+
+    sh ("git show origin/deploy:files/${ENVIRONMENT}/config_aws.py > config/config_aws.py")
+    sh ("git show origin/deploy:files/${ENVIRONMENT}/config_database.py > config/config_database.py")
+    sh ("git show origin/deploy:files/${ENVIRONMENT}/config_aws_masternaut.py > config/config_aws_masternaut.py")
+    sh """
+      find . -type f -iname "*.sh" -print0 | xargs -r0 chmod +x
+      find . -type f -iname "*.py" -print0 | xargs -r0 chmod +x
+    """
+  }
+}
+
+def compressArtifact() {
+  stage("Compress artifact") {
+    sh """
+      tar cf ${BUILD_TAG}.tar * --exclude-vcs --exclude='Jenkinsfile'
+      gzip --best ${BUILD_TAG}.tar
+    """
+  }
+}
+
+
+def uploadArtifact() {
+  stage("Upload artifact") {
+    withCredentials([sshUserPrivateKey(credentialsId: "ci-key", keyFileVariable: 'KEYFILE')]) {
+      sh """#!/bin/bash
+        scp -o StrictHostKeyChecking=no -i ${KEYFILE} ${BUILD_TAG}.tar.gz jenkins@${ARTIFACT_SERVER}:/pacotes/sascar-projects/${BUILDS_PATH}/
+        ssh -o StrictHostKeyChecking=no -i ${KEYFILE} jenkins@${ARTIFACT_SERVER} chmod 644 /pacotes/sascar-projects/${BUILDS_PATH}/${BUILD_TAG}.tar.gz
+      """
+      archiveArtifacts allowEmptyArchive: false, artifacts: "${BUILD_TAG}.tar.gz", caseSensitive: true, defaultExcludes: true, fingerprint: false, onlyIfSuccessful: false
+    }
+  }
+}
+
+def unittest () {
+  stage ('Unit Test') {
+    if (BRANCH_NAME == 'homologacao') {
+      sh """ coverage run -m unittest discover -p "*.py"
+      """
+      sh ('coverage report')
+      sh ('coverage xml')
+    }
+  }
+}
+
+def deploy() {
+  stage("Deploy") {
+    sh """
+    git stash
+    git checkout deploy
+    make init
+    ansible-playbook -i ${ENVIRONMENT}.ini main.yml --extra-vars '{\
+      "deploy_path":"${DEPLOY_PATH}", \
+      "deploy_file":"${BUILD_TAG}.tar.gz", \
+      "ambiente":"${ENVIRONMENT}" \
+    }'
+    """
+  }
+}
+
+def callsonarscanner() {
+  stage ('Sonar Scanner') {
+    if (BRANCH_NAME == 'homologacao') {
+      sonarQualityGate(sonarScannerVersion);
+    }
+  }
+}
+
+def callgittag() {
+  stage ('Git Tag') {
+    if(BRANCH_NAME in GMUD_NEED) {
+      cicdGitTag();
+    }
+  }
+}

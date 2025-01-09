@@ -1,0 +1,48 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: "${APP_NAME}-${APP_VERSION}-setup"
+objects:
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    annotations:
+      openshift.io/node-selector: "node-role.kubernetes.io/${CLUSTER_DEPLOY}=true"
+    name: "${PROJECT_NAME}"
+
+- apiVersion: authorization.openshift.io/v1
+  kind: RoleBinding
+  metadata:
+    name: jenkins-ci-tools:edit
+    namespace: "${PROJECT_NAME}"
+  roleRef:
+    name: edit
+  subjects:
+  - kind: ServiceAccount
+    name: jenkins
+    namespace: ${PROJECT_NAME}
+  userNames:
+  - system:serviceaccount:${PROJECT_NAME}:jenkins
+  - system:serviceaccount:${PROJECT_NAME}:default
+  - system:serviceaccount:ci-tools:default
+parameters:
+- description: Project Name to deploy the app
+  displayName: Project Name
+  name: PROJECT_NAME
+  required: true
+- name: APP_NAME
+  description: The name assigned to all of the application objects defined in this
+    template.
+  displayName: Application Name
+  required: true
+  value: XXXXXXXXXXXXXXXXXX
+- name: APP_VERSION
+  description: The version of this application.
+  displayName: Application Version
+  required: true
+  value: v1
+- name: CLUSTER_DEPLOY
+  description: Cluster to Deploy Pod
+  displayName: CLUSTER_DEPLOY
+  required: true
+  value: XXXXXXXXXX

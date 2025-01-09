@@ -1,0 +1,276 @@
+apiVersion: v1
+kind: Template
+metadata:
+    name: '${APP_NAME}'
+parameters:
+- name: APP_NAME
+  description: 'The name assigned to all of the application objects defined in this template.'
+  displayName: 'Application Name'
+  required: true
+  value: XXXXXXXXXXXX
+- name: APP_VERSION
+  description: 'The version of this application.'
+  displayName: 'Application Version'
+  required: true
+  value: XX
+- name: IMAGE_TAG
+  description: 'The docker image tag generated in the build process'
+  displayName: 'Image Tag'
+  required: true
+  value: XXX
+- name: IMAGE_NAMESPACE
+  description: 'The docker image namespace in the registry'
+  displayName: 'Image namespace'
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXX
+- name: SERVIDOR_BD_ORACLE_DW_SASCAR_IP
+  description: The address of Oracle DB
+  displayName: Oracle address
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXXXXXXX
+- name: SERVIDOR_BD_ORACLE_DW_SASCAR_LOGIN
+  description: The user login of Oracle DB
+  displayName: Oracle login
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXXXXXXX
+- name: SERVIDOR_BD_ORACLE_DW_SASCAR_NOME
+  description: The Oracle database name
+  displayName: Oracle database
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXXXXXXX
+- name: SERVIDOR_BD_ORACLE_DW_SASCAR_PORTA
+  description: The Oracle database port
+  displayName: Oracle port
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXXXXXXX
+- name: SERVIDOR_BD_ORACLE_DW_SASCAR_SENHA
+  description: The Oracle database password
+  displayName: Oracle password
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXXXXXXX
+- name: KAFKA_HOSTS
+  description: The Kafka address
+  displayName: Kafka address
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXXXXXXX
+- name: KAFKA_ZOOKEEPER
+  description: The Zookeeper address
+  displayName: Zookeeper address
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXXXXXXX
+- name: KAFKA_TOPIC
+  description: The Kafka topic
+  displayName: Kafka topic
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXXXXXXX
+- name: KAFKA_CONSUMER_GROUP_ID
+  description: The Kafka Group
+  displayName: Kafka Group
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXXXXXXX
+- name: LOG_LEVEL
+  description: Level of logging (40 Error|30 Warning|20 Info|10 Debug)
+  displayName: Log Level
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXXXXXXX
+- name: CPU_LIMIT
+  description: Max value for cpu cores
+  displayName: Max CPU
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXXXXXXX
+- name: MEMORY_LIMIT
+  description: 'MEMORY_LIMIT'
+  displayName: 'MEMORY_LIMIT'
+  required: true
+  value: XXXX
+- name: MAX_REPLICATION
+  description: 'MAX_REPLICATION'
+  displayName: 'MAX_REPLICATION'
+  required: true
+  value: XXXX
+- name: TARGET_UTILIZATION
+  description: 'TARGET_UTILIZATION'
+  displayName: 'TARGET_UTILIZATION'
+  required: true
+  value: XXXX 
+objects:
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    labels: 
+      app: ${APP_NAME}
+      version: ${APP_VERSION}
+    name: ${APP_NAME}-${APP_VERSION}
+  spec:
+    replicas: 1
+    selector: 
+      app: ${APP_NAME}
+      deploymentconfig: ${APP_NAME}-${APP_VERSION}
+    strategy: 
+      rollingParams: 
+        intervalSeconds: 5
+        maxSurge: "25%"
+        maxUnavailable: "25%"
+        timeoutSeconds: 600
+        updatePeriodSeconds: 5
+      type: Rolling
+      resources: 
+        limits: 
+          cpu: ${{CPU_LIMIT}}
+          memory: ${{MEMORY_LIMIT}}
+        requests: 
+          cpu: 1m
+          memory: 1Mi
+    revisionHistoryLimit: 3
+    template: 
+      metadata: 
+        annotations: 
+          prometheus.io/path: "/actuator/prometheus"
+          prometheus.io/scheme: "HTTP"
+          prometheus.io/port: "8080"
+          prometheus.io/scrape: "true"
+        labels: 
+          app: '${APP_NAME}'
+          version: '${APP_VERSION}'
+          deploymentconfig: '${APP_NAME}-${APP_VERSION}'
+      spec: 
+        containers: 
+        - image: '${APP_NAME}-${APP_VERSION}:${IMAGE_TAG}'
+          imagePullPolicy: Always
+          name: '${APP_NAME}-${APP_VERSION}'
+          ports: 
+          - containerPort: 8080
+            protocol: TCP
+          env:
+          - name: SERVIDOR_BD_ORACLE_DW_SASCAR_LOGIN
+            value: ${SERVIDOR_BD_ORACLE_DW_SASCAR_LOGIN}
+          - name: SERVIDOR_BD_ORACLE_DW_SASCAR_NOME
+            value: ${SERVIDOR_BD_ORACLE_DW_SASCAR_NOME}
+          - name: SERVIDOR_BD_ORACLE_DW_SASCAR_PORTA
+            value: ${SERVIDOR_BD_ORACLE_DW_SASCAR_PORTA}
+          - name: SERVIDOR_BD_ORACLE_DW_SASCAR_IP
+            value: ${SERVIDOR_BD_ORACLE_DW_SASCAR_IP}
+          - name: SERVIDOR_BD_ORACLE_DW_SASCAR_SENHA
+            value: ${SERVIDOR_BD_ORACLE_DW_SASCAR_SENHA}
+          - name: KAFKA_HOSTS
+            value: ${KAFKA_HOSTS}
+          - name: KAFKA_ZOOKEEPER
+            value: ${KAFKA_ZOOKEEPER}
+          - name: KAFKA_TOPIC
+            value: ${KAFKA_TOPIC}
+          - name: KAFKA_CONSUMER_GROUP_ID
+            value: ${KAFKA_CONSUMER_GROUP_ID}
+          - name: LOG_LEVEL
+            value: ${LOG_LEVEL}
+          resources: 
+            limits: 
+              cpu: ${{CPU_LIMIT}}
+              memory: ${{MEMORY_LIMIT}}
+            requests: 
+              cpu: 1m
+              memory: 1Mi
+          terminationMessagePath: /dev/termination-log
+          livenessProbe: 
+            httpGet: 
+              path: /actuator/health
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 180
+            timeoutSeconds: 30
+            periodSeconds: 30
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe: 
+            httpGet: 
+              path: /actuator/health
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 180
+            timeoutSeconds: 30
+            periodSeconds: 30
+            successThreshold: 1
+            failureThreshold: 3
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        securityContext: {}
+        terminationGracePeriodSeconds: 300
+    test: false
+    triggers:
+    - type: ConfigChange
+    - imageChangeParams: 
+        automatic: true
+        containerNames:
+        - ${APP_NAME}-${APP_VERSION}
+        from: 
+          kind: ImageStreamTag
+          name: ${APP_NAME}-${APP_VERSION}:${IMAGE_TAG}
+          namespace: ${IMAGE_NAMESPACE}
+      type: ImageChange
+  status: {}
+  
+- apiVersion: v1
+  kind: Service
+  metadata:
+    annotations: 
+      openshift.io/generated-by: "OpenShiftNewApp"
+      prometheus.io/port: "8080"
+      prometheus.io/scheme: "http"
+      prometheus.io/scrape: "true"
+      prometheus.io/path: "/metrics"
+    labels: 
+      app: ${APP_NAME}    
+      version: ${APP_VERSION}
+    name: ${APP_NAME}-${APP_VERSION}
+  spec:
+    ports: 
+    - name: 8080-tcp
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+    selector: 
+      app: ${APP_NAME}
+      deploymentconfig: ${APP_NAME}-${APP_VERSION}
+    sessionAffinity: None
+    type: ClusterIP
+  status:
+    loadBalancer: {}
+- apiVersion: autoscaling/v2beta1
+  kind: HorizontalPodAutoscaler
+  metadata:
+    labels:
+      app: ${APP_NAME}
+      version: ${APP_VERSION}
+    name: ${APP_NAME}-${APP_VERSION}-autoscale
+    namespace: ${IMAGE_NAMESPACE}
+  spec:
+    maxReplicas: ${{MAX_REPLICATION}}
+    minReplicas: 1
+    scaleTargetRef:
+      apiVersion: v1
+      kind: DeploymentConfig
+      name: ${APP_NAME}-${APP_VERSION}
+    metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        targetAverageUtilization: ${{TARGET_UTILIZATION}}
+  status:
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    annotations:
+      openshift.io/host.generated: "true"
+    labels:
+      app: ${APP_NAME}
+      version: ${APP_VERSION}
+    name: ${APP_NAME}-${APP_VERSION}
+  spec:
+    port:
+      targetPort: "8080-tcp"
+    to:
+      kind: Service
+      name: ${APP_NAME}-${APP_VERSION}
+      weight: 100
+    wildcardPolicy: "None"
+  status:
+    ingress: null

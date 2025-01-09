@@ -1,0 +1,11 @@
+version: '3.3'
+services:
+  tmps-d0:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: ./etc/openshift/desenvolvimento/deployment.env
+    ports:
+      - 8080:8080
+      
+    

@@ -1,0 +1,290 @@
+apiVersion: v1
+kind: Template
+metadata:
+    name: '${APP_NAME}'
+parameters:
+- name: APP_NAME
+  description: 'The name assigned to all of the application objects defined in this template.'
+  displayName: 'Application Name'
+  required: true
+  value: XXXXXXXXXXXX
+- name: APP_VERSION
+  description: 'The version of this application.'
+  displayName: 'Application Version'
+  required: true
+  value: XX
+- name: IMAGE_TAG
+  description: 'The docker image tag generated in the build process'
+  displayName: 'Image Tag'
+  required: true
+  value: XXX
+- name: IMAGE_NAMESPACE
+  description: 'The docker image namespace in the registry'
+  displayName: 'Image namespace'
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXX
+- name: SERVIDOR_BD_ORACLE_DW_SASCAR_IP
+  description: The address of Oracle DB
+  displayName: Oracle address
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXXXXXXX
+- name: SERVIDOR_BD_ORACLE_DW_SASCAR_LOGIN
+  description: The user login of Oracle DB
+  displayName: Oracle login
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXXXXXXX
+- name: SERVIDOR_BD_ORACLE_DW_SASCAR_NOME
+  description: The Oracle database name
+  displayName: Oracle database
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXXXXXXX
+- name: SERVIDOR_BD_ORACLE_DW_SASCAR_PORTA
+  description: The Oracle database port
+  displayName: Oracle port
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXXXXXXX
+- name: SERVIDOR_BD_POSTGRE_DOM_SASCAR_IP
+  description: The address of Oracle DB
+  displayName: Oracle address
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXXXXXXX
+- name: SERVIDOR_BD_POSTGRE_DOM_SASCAR_LOGIN
+  description: The user login of Oracle DB
+  displayName: Oracle login
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXXXXXXX
+- name: SERVIDOR_BD_POSTGRE_DOM_SASCAR_NOME
+  description: The Oracle database name
+  displayName: Oracle database
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXXXXXXX
+- name: SERVIDOR_BD_POSTGRE_DOM_SASCAR_PORTA
+  description: The Oracle database port
+  displayName: Oracle port
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXXXXXXX
+- name: LOG_LEVEL
+  description: Level of logging (40 Error|30 Warning|20 Info|10 Debug)
+  displayName: Log Level
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXXXXXXX
+- name: MAX_PODS
+  description: Max number of Pods allowed through autoscaling
+  displayName: Max Pods
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXXXXXXX
+- name: MAX_CPU
+  description: Max value for cpu cores
+  displayName: Max CPU
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXXXXXXX
+- name: VAULT_SECRET_MANAGER
+  description: 'Vault Secret'
+  displayName: 'Vault Secret'
+  required: true
+  value: XXXXXXXXXXXXXXXXXXXXXXXXXX
+objects:
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    labels: 
+      app: ${APP_NAME}
+      version: ${APP_VERSION}
+    name: ${APP_NAME}-${APP_VERSION}
+  spec:
+    replicas: 1
+    selector: 
+      app: ${APP_NAME}
+      deploymentconfig: ${APP_NAME}-${APP_VERSION}
+    strategy: 
+      rollingParams: 
+        intervalSeconds: 5
+        maxSurge: "25%"
+        maxUnavailable: "25%"
+        timeoutSeconds: 600
+        updatePeriodSeconds: 5
+      type: Rolling
+      resources: 
+        limits: 
+          cpu: ${MAX_CPU}
+          memory: 1024Mi
+        requests: 
+          cpu: 1m
+          memory: 128Mi
+    revisionHistoryLimit: 3
+    template: 
+      metadata: 
+        annotations: 
+          prometheus.io/path: "/actuator/prometheus"
+          prometheus.io/scheme: "HTTP"
+          prometheus.io/port: "8080"
+          prometheus.io/scrape: "true"
+        labels: 
+          app: '${APP_NAME}'
+          version: '${APP_VERSION}'
+          deploymentconfig: '${APP_NAME}-${APP_VERSION}'
+      spec: 
+        containers: 
+        - image: '${APP_NAME}-${APP_VERSION}:${IMAGE_TAG}'
+          imagePullPolicy: Always
+          name: '${APP_NAME}-${APP_VERSION}'
+          ports: 
+          - containerPort: 8080
+            protocol: TCP
+          envFrom:
+            - secretRef:
+                name: ${APP_NAME}-${APP_VERSION}
+            - secretRef:
+                name: secret-newrelic
+          env:
+          - name: SERVIDOR_BD_POSTGRE_DOM_SASCAR_LOGIN
+            value: ${SERVIDOR_BD_POSTGRE_DOM_SASCAR_LOGIN}
+          - name: SERVIDOR_BD_POSTGRE_DOM_SASCAR_NOME
+            value: ${SERVIDOR_BD_POSTGRE_DOM_SASCAR_NOME}
+          - name: SERVIDOR_BD_POSTGRE_DOM_SASCAR_PORTA
+            value: ${SERVIDOR_BD_POSTGRE_DOM_SASCAR_PORTA}
+          - name: SERVIDOR_BD_POSTGRE_DOM_SASCAR_IP
+            value: ${SERVIDOR_BD_POSTGRE_DOM_SASCAR_IP}
+          - name: SERVIDOR_BD_ORACLE_DW_SASCAR_LOGIN
+            value: ${SERVIDOR_BD_ORACLE_DW_SASCAR_LOGIN}
+          - name: SERVIDOR_BD_ORACLE_DW_SASCAR_NOME
+            value: ${SERVIDOR_BD_ORACLE_DW_SASCAR_NOME}
+          - name: SERVIDOR_BD_ORACLE_DW_SASCAR_PORTA
+            value: ${SERVIDOR_BD_ORACLE_DW_SASCAR_PORTA}
+          - name: SERVIDOR_BD_ORACLE_DW_SASCAR_IP
+            value: ${SERVIDOR_BD_ORACLE_DW_SASCAR_IP}
+          - name: LOG_LEVEL
+            value: ${LOG_LEVEL}
+          resources: 
+            limits: 
+              cpu: ${{MAX_CPU}}
+              memory: 1024Mi
+            requests: 
+              cpu: 1m
+              memory: 128Mi
+          terminationMessagePath: /dev/termination-log
+          livenessProbe: 
+            httpGet: 
+              path: /actuator/health
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 180
+            timeoutSeconds: 30
+            periodSeconds: 30
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe: 
+            httpGet: 
+              path: /actuator/health
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 180
+            timeoutSeconds: 30
+            periodSeconds: 30
+            successThreshold: 1
+            failureThreshold: 3
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        securityContext: {}
+        terminationGracePeriodSeconds: 300
+    test: false
+    triggers:
+    - type: ConfigChange
+    - imageChangeParams: 
+        automatic: true
+        containerNames:
+        - ${APP_NAME}-${APP_VERSION}
+        from: 
+          kind: ImageStreamTag
+          name: ${APP_NAME}-${APP_VERSION}:${IMAGE_TAG}
+          namespace: ${IMAGE_NAMESPACE}
+      type: ImageChange
+  status: {}  
+- apiVersion: v1
+  kind: Service
+  metadata:
+    annotations: 
+      openshift.io/generated-by: "OpenShiftNewApp"
+      prometheus.io/port: "8080"
+      prometheus.io/scheme: "http"
+      prometheus.io/scrape: "true"
+      prometheus.io/path: "/metrics"
+    labels: 
+      app: ${APP_NAME}    
+      version: ${APP_VERSION}
+    name: ${APP_NAME}-${APP_VERSION}
+  spec:
+    ports: 
+    - name: 8080-tcp
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+    selector: 
+      app: ${APP_NAME}
+      deploymentconfig: ${APP_NAME}-${APP_VERSION}
+    sessionAffinity: None
+    type: ClusterIP
+  status:
+    loadBalancer: {}
+- apiVersion: autoscaling/v2beta1
+  kind: HorizontalPodAutoscaler
+  metadata:
+    labels:
+      app: ${APP_NAME}
+      version: ${APP_VERSION}
+    name: ${APP_NAME}-${APP_VERSION}-autoscale
+    namespace: ${IMAGE_NAMESPACE}
+  spec:
+    maxReplicas: ${{MAX_PODS}}
+    minReplicas: 1
+    scaleTargetRef:
+      apiVersion: v1
+      kind: DeploymentConfig
+      name: ${APP_NAME}-${APP_VERSION}
+    metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        targetAverageUtilization: 80
+  status:
+    currentCPUUtilizationPercentage: 1
+    currentReplicas: 1
+    desiredReplicas: 1
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    annotations:
+      openshift.io/host.generated: "true"
+    labels:
+      app: ${APP_NAME}
+      version: ${APP_VERSION}
+    name: ${APP_NAME}-${APP_VERSION}
+  spec:
+    port:
+      targetPort: "8080-tcp"
+    tls:
+      termination: "edge"
+    to:
+      kind: Service
+      name: ${APP_NAME}-${APP_VERSION}
+      weight: 100
+    wildcardPolicy: "None"
+  status:
+    ingress: null
+- apiVersion: external-secrets.io/v1beta1
+  kind: ExternalSecret
+  metadata:
+    name: ${APP_NAME}-${APP_VERSION}-es
+  spec:
+    refreshInterval: 300s
+    secretStoreRef:
+      kind: ClusterSecretStore
+      name: sascar-vault
+    target:
+      name: ${APP_NAME}-${APP_VERSION}
+      deletionPolicy: Retain
+      creationPolicy: Owner
+    dataFrom:
+      - extract:
+          conversionStrategy: Default
+          key: ${VAULT_SECRET_MANAGER}
